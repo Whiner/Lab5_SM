@@ -13,7 +13,7 @@ public class Service {
     public void addToQueue(Request request) {
         System.out.println("-------------------------");
         boolean queueAndServiceEmpty = isQueueAndServiceEmpty();
-        double passedTime = 0;
+        double passedTime;
         if (!queueAndServiceEmpty) {
             passedTime = randomizer.getNormalY(Randomizer.INTERVAL_M, Randomizer.INTERVAL_CKO);
             System.out.printf("Прошло %4.2f минут\n", passedTime);
@@ -60,7 +60,11 @@ public class Service {
         double minutes = 0.0;
         double intervals = 10;
         while (!isQueueAndServiceEmpty()) {
+            System.out.println("-------------------------");
+            System.out.println("Прошло " + intervals + " минут");
+            System.out.println("-------------------------");
             service(intervals);
+            System.out.println("-------------------------");
             minutes += intervals;
         }
         return minutes;
@@ -82,7 +86,7 @@ public class Service {
                 if(value == null) {
                     value = searchNextRequest(entry.getKey());
                     if (value == null) {
-                        System.out.println("++ Свободно");
+                        System.out.println("++ Свободен");
                         break; // простой
                     } else {
                         entry.setValue(value);
