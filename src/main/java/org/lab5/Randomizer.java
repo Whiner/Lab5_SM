@@ -5,12 +5,13 @@ import java.util.Random;
 public class Randomizer {
     public final static double INTERVAL_M = 5;
     public final static double INTERVAL_CKO = 1;
-    public final static double WAIT_INTERVAL_M = 10;
     public final static double SERVICE_INTERVAL_M = 30;
+    public final static double FAILURE_INTERVAL_M = 10;
+
 
     private Random r = new Random();
 
-    private final int n = 10;
+    private final int n = 20;
 
     public double getKcu() {
         return r.nextDouble();

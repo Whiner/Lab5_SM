@@ -3,49 +3,51 @@ package org.lab5;
 import java.util.ArrayDeque;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 public class Service {
     private ArrayDeque<Request> queue = new ArrayDeque<>();
     private final int channelCount = 6;
-    private Randomizer randomizer = new Randomizer();
-    private Map<Integer, Request> channelOccupancy = new HashMap<>(); // номер канала, освободится через
+    private Map<Integer, Request> channelOccupancy = new HashMap<>(); // номер канала, текущая заявка там
 
-    public void addToQueue(Request request) {
-        System.out.println("-------------------------");
+    public void addToQueue(Request request, double after) {
         boolean queueAndServiceEmpty = isQueueAndServiceEmpty();
-        double passedTime;
-        if (!queueAndServiceEmpty) {
-            passedTime = randomizer.getNormalY(Randomizer.INTERVAL_M, Randomizer.INTERVAL_CKO);
-            System.out.printf("Прошло %4.2f минут\n", passedTime);
+        System.out.println("-----------------------------------------------------------");
+        if (after != 0) {
+            System.out.printf("Прошло %4.2f минут\n", after);
             System.out.println("-------------------------");
-            service(passedTime);
+            if (!queueAndServiceEmpty) {
+                service(after);
+                System.out.println("-------------------------");
+            }
+            printQueue();
             System.out.println("-------------------------");
         }
-        System.out.println("Размер очереди = " + queue.size());
-        System.out.println("-------------------------");
-        System.out.println("Пришел " + request.getName());
-        int channelNumber = selectChannelNumber();
-        request.setChannelNumber(channelNumber);
-        System.out.println("Выбран " + channelNumber + "-й канал");
-        request.setWaitTime(randomizer.getExpY(Randomizer.WAIT_INTERVAL_M));
+        System.out.printf("+ Пришел %s. Время обслуживания: %4.2f. Время отказа: %4.2f\n",
+                request.getName(),
+                request.getServiceTime(),
+                request.getFailureTime());
 
-        if(queueAndServiceEmpty){
-            channelOccupancy.put(request.getChannelNumber(), request);
+        if (queueAndServiceEmpty) {
+            channelOccupancy.put(1, request);
         } else {
             queue.add(request);
         }
-        System.out.println("-------------------------");
+    }
+
+    private Request selectRequestFromQueue() {
+        return null;
     }
 
     private int selectChannelNumber() {
         int channelNumber = 1;
         Request request = channelOccupancy.get(channelNumber);
-        if(request == null) {
+        if (request == null) {
             return channelNumber;
         }
         double minChannelReleaseTime = request.getServiceTime();
         for (Map.Entry<Integer, Request> entry : channelOccupancy.entrySet()) {
-            if(entry.getValue() == null) {
+            if (entry.getValue() == null) {
                 return entry.getKey();
             }
             if (minChannelReleaseTime > entry.getValue().getServiceTime()) {
@@ -70,69 +72,105 @@ public class Service {
         return minutes;
     }
 
+    private Request getRequestByMinFailureTime() {
+        double min = 10E8;
+        Request minFailureRequest = null;
+        for (Request request : queue) {
+            if (request.getFailureTime() < min) {
+                minFailureRequest = request;
+                min = request.getFailureTime();
+            }
+        }
+        return minFailureRequest;
+    }
+
+    private void subtractFromFailureTime(double minutes) {
+        for (Request request : queue) {
+            request.setFailureTime(request.getFailureTime() - minutes);
+        }
+    }
+
+    private void removeFailureRequests() {
+        for (Request request : queue) {
+            if (request.getFailureTime() < 0) {
+                System.out.println("+++ " + request.getName() + " ушел без обслуживания");
+                queue.remove(request);
+            }
+        }
+    }
 
     private void service(double minutes) {
-        for (Map.Entry<Integer, Request> entry : channelOccupancy.entrySet()) {
+        subtractFromFailureTime(minutes);
+        Set<Map.Entry<Integer, Request>> entries = channelOccupancy.entrySet();
+        for (Map.Entry<Integer, Request> entry : entries) {
             System.out.println("+ Канал №" + entry.getKey() + " :");
 
             double leftServiceTime;
-            double leftWaitTime;
             double leftPassedTime = minutes;
             do {
                 Request value = entry.getValue();
-                /*if(value.getName() == null){
-                            System.out.println("++ Пусто");
-                        }*/
-                if(value == null) {
-                    value = searchNextRequest(entry.getKey());
+                if (value == null) {
+                    //value = searchNextRequest(entry.getKey());
+                    value = getRequestByMinFailureTime();
                     if (value == null) {
                         System.out.println("++ Свободен");
                         break; // простой
                     } else {
-                        entry.setValue(value);
-                        queue.remove(value);
-                    }
-                }
-
-                leftWaitTime = value.getWaitTime() - leftPassedTime;
-
-
-                if (leftWaitTime > 0) {
-                    value.setWaitTime(leftWaitTime);     //не хватило времени
-                    System.out.printf("++ Ожидание (Осталось %4.3f минут)\n", leftWaitTime);
-                    break;
-                } else { //хватило
-                    leftPassedTime -= value.getWaitTime();
-                    value.setWaitTime(0);
-
-                    leftServiceTime = value.getServiceTime() - leftPassedTime;
-
-                    if (leftServiceTime > 0) {
-                        value.setServiceTime(leftServiceTime);
-                        System.out.printf("++ Обслуживание не завершено (Осталось %4.3f минут)\n", leftServiceTime);
-                        break;
-                    } else {
-                        leftPassedTime -= value.getServiceTime();
-                        if(value.getName() != null) {
-                            System.out.println("++ " + value.getName() + " обслужен ");
-                            value.setServiceTime(0);
-                            entry.setValue(null);
+                        if (value.getFailureTime() + leftPassedTime < 0) {
+                            if (entry.getKey().equals(entries.size())) {
+                                System.out.println("++ " + value.getName() + " ушел без обслуживания");
+                                queue.remove(value);
+                            }
+                            break;
+                        } else {
+                            entry.setValue(value);
+                            queue.remove(value);
                         }
-
                     }
                 }
+
+                leftServiceTime = value.getServiceTime() - leftPassedTime;
+
+                if (leftServiceTime > 0) {
+                    value.setServiceTime(leftServiceTime);
+                    System.out.printf("++ %s Обслуживание не завершено (Осталось %4.3f минут)\n", value.getName(), leftServiceTime);
+                    break;
+                } else {
+                    leftPassedTime -= value.getServiceTime();
+                    if (value.getName() != null) {
+                        System.out.println("++ " + value.getName() + " обслужен ");
+                        value.setServiceTime(0);
+                        entry.setValue(null);
+                    }
+
+                }
+
             } while (leftPassedTime > 0);
         }
+        removeFailureRequests();
     }
 
 
-    private Request searchNextRequest(int channelNumber) {
+    /*private Request searchNextRequest(int channelNumber) {
         for (Request request : queue) {
             if (request.getChannelNumber() == channelNumber) {
                 return request;
             }
         }
         return null;
+    }*/
+
+    public void printQueue() {
+        if (queue.isEmpty()) {
+            System.out.println("Очередь пуста");
+        } else {
+            for (Request request : queue) {
+                System.out.printf("+ %s. Время обслуживания: %4.2f. Время отказа: %4.2f\n",
+                        request.getName(),
+                        request.getServiceTime(),
+                        request.getFailureTime());
+            }
+        }
     }
 
     private boolean isQueueAndServiceEmpty() {
