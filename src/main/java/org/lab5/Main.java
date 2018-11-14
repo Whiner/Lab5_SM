@@ -22,6 +22,8 @@ public class Main {
         double v = service.serviceRemaining();
         System.out.printf("Обслужены остальные клиенты. Потребовалось %4.2f минут\n", v);
 
+        System.out.printf("Среднее время простоя %4.2f\n", service.getAverageServiceWaitTime());
+        System.out.printf("Среднее время ожидания %4.2f\n", service.getAverageRequestWaitTime());
 
     }
 }

@@ -2,7 +2,8 @@ package org.lab5;
 
 public class Request {
     private double serviceTime = 0;
-    //private double waitTime = 0;
+    private double currentWaitTime = 0;
+    private double lastFailureTime = 0;
     private double failureTime = 0;
     private String name;
     //private int channelNumber = -1;
@@ -10,27 +11,32 @@ public class Request {
     public Request(double serviceTime, double failureTime, String name) {
         this.serviceTime = serviceTime;
         this.name = name;
+        setFailureTime(failureTime);
+    }
+
+    public double getFailureTime() {
+        return failureTime;
+    }
+
+    public void setFailureTime(double failureTime) {
         this.failureTime = failureTime;
+        this.lastFailureTime = failureTime;
     }
 
     public Request() {
     }
 
-    /*public double getWaitTime() {
-        return waitTime;
+    public double getCurrentWaitTime() {
+        return currentWaitTime;
     }
 
-    public void setWaitTime(double waitTime) {
-        this.waitTime = waitTime;
-    }*/
-
-    /*public int getChannelNumber() {
-        return channelNumber;
+    public void setCurrentWaitTime(double currentWaitTime) {
+        this.currentWaitTime = currentWaitTime;
     }
 
-    public void setChannelNumber(int channelNumber) {
-        this.channelNumber = channelNumber;
-    }*/
+    public void addCurrentWaitTime(double time) {
+        this.currentWaitTime += time;
+    }
 
     public double getServiceTime() {
         return serviceTime;
@@ -48,11 +54,11 @@ public class Request {
         this.name = name;
     }
 
-    public double getFailureTime() {
-        return failureTime;
+    public double getLastFailureTime() {
+        return lastFailureTime;
     }
 
-    public void setFailureTime(double failureTime) {
-        this.failureTime = failureTime;
+    public void setLastFailureTime(double lastFailureTime) {
+        this.lastFailureTime = lastFailureTime;
     }
 }

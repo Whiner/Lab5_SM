@@ -1,16 +1,17 @@
 package org.lab5;
 
-import java.util.ArrayDeque;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 public class Service {
-    private ArrayDeque<Request> queue = new ArrayDeque<>();
+    private List<Request> queue = new ArrayList<>();
     private final int channelCount = 6;
     private Map<Integer, Request> channelOccupancy = new HashMap<>(); // номер канала, текущая заявка там
+    private double currentServiceWaitTime = 0;
+    private int totalRequestCount = 0;
+    private double currentRequestWaitTime = 0;
 
     public void addToQueue(Request request, double after) {
+        totalRequestCount++;
         boolean queueAndServiceEmpty = isQueueAndServiceEmpty();
         System.out.println("-----------------------------------------------------------");
         if (after != 0) {
@@ -23,10 +24,11 @@ public class Service {
             printQueue();
             System.out.println("-------------------------");
         }
+        addWaitTimeToRequestsInQueue(after);
         System.out.printf("+ Пришел %s. Время обслуживания: %4.2f. Время отказа: %4.2f\n",
                 request.getName(),
                 request.getServiceTime(),
-                request.getFailureTime());
+                request.getLastFailureTime());
 
         if (queueAndServiceEmpty) {
             channelOccupancy.put(1, request);
@@ -35,28 +37,23 @@ public class Service {
         }
     }
 
-    private Request selectRequestFromQueue() {
-        return null;
+    public double getAverageRequestWaitTime() {
+        return currentRequestWaitTime / totalRequestCount;
     }
 
-    private int selectChannelNumber() {
-        int channelNumber = 1;
-        Request request = channelOccupancy.get(channelNumber);
-        if (request == null) {
-            return channelNumber;
-        }
-        double minChannelReleaseTime = request.getServiceTime();
-        for (Map.Entry<Integer, Request> entry : channelOccupancy.entrySet()) {
-            if (entry.getValue() == null) {
-                return entry.getKey();
-            }
-            if (minChannelReleaseTime > entry.getValue().getServiceTime()) {
-                channelNumber = entry.getKey();
-                minChannelReleaseTime = entry.getValue().getServiceTime();
-            }
-        }
-        return channelNumber;
+    private void addWaitTimeToRequestsInQueue(double time) {
+        queue.forEach(request -> request.addCurrentWaitTime(time));
     }
+
+    /*private double getWaitTimeForNewRequest(Request request) {
+        List<Request> queueCopy = new ArrayList<>();
+        Collections.copy(queueCopy, queue);
+        queueCopy.add(request);
+        return queueCopy.stream().filter(
+                request1 -> request1.getServiceTime() < request.getServiceTime())
+                .mapToDouble(request1 -> request.getServiceTime())
+                .sum();
+    }*/
 
     public double serviceRemaining() {
         double minutes = 0.0;
@@ -76,9 +73,9 @@ public class Service {
         double min = 10E8;
         Request minFailureRequest = null;
         for (Request request : queue) {
-            if (request.getFailureTime() < min) {
+            if (request.getLastFailureTime() < min) {
                 minFailureRequest = request;
-                min = request.getFailureTime();
+                min = request.getLastFailureTime();
             }
         }
         return minFailureRequest;
@@ -86,17 +83,31 @@ public class Service {
 
     private void subtractFromFailureTime(double minutes) {
         for (Request request : queue) {
-            request.setFailureTime(request.getFailureTime() - minutes);
+            request.setLastFailureTime(request.getLastFailureTime() - minutes);
         }
     }
 
     private void removeFailureRequests() {
-        for (Request request : queue) {
-            if (request.getFailureTime() < 0) {
+        List<Request> deleteRequest = new ArrayList<>();
+        queue.stream().filter(request -> request.getLastFailureTime() < 0).forEach(deleteRequest::add);
+        if (deleteRequest.size() != 0) {
+            System.out.println("-------------------------");
+            deleteRequest.forEach(request -> {
+                        System.out.printf("+++ %s ушел без обслуживания. Прождал %4.2f\n", request.getName(), request.getFailureTime());
+                        queue.remove(request);
+                    }
+            );
+        }
+        /*for (Request request : queue) {
+            if (request.getLastFailureTime() < 0) {
                 System.out.println("+++ " + request.getName() + " ушел без обслуживания");
                 queue.remove(request);
             }
-        }
+        }*/
+    }
+
+    public double getAverageServiceWaitTime() {
+        return currentServiceWaitTime / channelCount / totalRequestCount;
     }
 
     private void service(double minutes) {
@@ -110,19 +121,22 @@ public class Service {
             do {
                 Request value = entry.getValue();
                 if (value == null) {
-                    //value = searchNextRequest(entry.getKey());
                     value = getRequestByMinFailureTime();
                     if (value == null) {
                         System.out.println("++ Свободен");
+                        currentServiceWaitTime += leftPassedTime;
                         break; // простой
                     } else {
-                        if (value.getFailureTime() + leftPassedTime < 0) {
+                        if (value.getLastFailureTime() + leftPassedTime < 0) {
                             if (entry.getKey().equals(entries.size())) {
-                                System.out.println("++ " + value.getName() + " ушел без обслуживания");
+                                value.addCurrentWaitTime(minutes - leftPassedTime);
+                                System.out.printf("++ %s ушел без обслуживания. Прождал %4.2f\n", value.getName(), value.getCurrentWaitTime());
+                                currentRequestWaitTime += value.getCurrentWaitTime();
                                 queue.remove(value);
                             }
                             break;
                         } else {
+                            value.addCurrentWaitTime(minutes - leftPassedTime);
                             entry.setValue(value);
                             queue.remove(value);
                         }
@@ -138,7 +152,9 @@ public class Service {
                 } else {
                     leftPassedTime -= value.getServiceTime();
                     if (value.getName() != null) {
-                        System.out.println("++ " + value.getName() + " обслужен ");
+                        System.out.println("++ " + value.getName() + " обслужен");
+                        assert value.getFailureTime() >= value.getCurrentWaitTime();
+                        currentRequestWaitTime += value.getCurrentWaitTime();
                         value.setServiceTime(0);
                         entry.setValue(null);
                     }
@@ -151,24 +167,16 @@ public class Service {
     }
 
 
-    /*private Request searchNextRequest(int channelNumber) {
-        for (Request request : queue) {
-            if (request.getChannelNumber() == channelNumber) {
-                return request;
-            }
-        }
-        return null;
-    }*/
-
     public void printQueue() {
         if (queue.isEmpty()) {
             System.out.println("Очередь пуста");
         } else {
+            System.out.println("Очередь");
             for (Request request : queue) {
-                System.out.printf("+ %s. Время обслуживания: %4.2f. Время отказа: %4.2f\n",
+                System.out.printf("+ %s. Время обслуживания: %4.2f. Оставшееся время отказа: %4.2f\n",
                         request.getName(),
                         request.getServiceTime(),
-                        request.getFailureTime());
+                        request.getLastFailureTime());
             }
         }
     }
