@@ -20,11 +20,11 @@ public class Service {
             if (!queueAndServiceEmpty) {
                 service(after);
                 System.out.println("-------------------------");
+                addWaitTimeToRequestsInQueue(after);
             }
             printQueue();
             System.out.println("-------------------------");
         }
-        addWaitTimeToRequestsInQueue(after);
         System.out.printf("+ Пришел %s. Время обслуживания: %4.2f. Время отказа: %4.2f\n",
                 request.getName(),
                 request.getServiceTime(),
@@ -45,26 +45,27 @@ public class Service {
         queue.forEach(request -> request.addCurrentWaitTime(time));
     }
 
-    /*private double getWaitTimeForNewRequest(Request request) {
-        List<Request> queueCopy = new ArrayList<>();
-        Collections.copy(queueCopy, queue);
-        queueCopy.add(request);
-        return queueCopy.stream().filter(
-                request1 -> request1.getServiceTime() < request.getServiceTime())
-                .mapToDouble(request1 -> request.getServiceTime())
-                .sum();
-    }*/
+    private double getMinServiceTime() {
+        double min = 1e10;
+        for (Map.Entry<Integer, Request> entry : channelOccupancy.entrySet()) {
+            Request value = entry.getValue();
+            if (value != null && value.getServiceTime() < min) {
+                min = value.getServiceTime();
+            }
+        }
+        return min;
+    }
 
     public double serviceRemaining() {
         double minutes = 0.0;
-        double intervals = 10;
         while (!isQueueAndServiceEmpty()) {
+            double minServiceTime = getMinServiceTime();
             System.out.println("-------------------------");
-            System.out.println("Прошло " + intervals + " минут");
+            System.out.printf("Прошло %4.2f минут\n", minServiceTime);
             System.out.println("-------------------------");
-            service(intervals);
+            service(minServiceTime);
             System.out.println("-------------------------");
-            minutes += intervals;
+            minutes += minServiceTime;
         }
         return minutes;
     }
@@ -94,16 +95,11 @@ public class Service {
             System.out.println("-------------------------");
             deleteRequest.forEach(request -> {
                         System.out.printf("+++ %s ушел без обслуживания. Прождал %4.2f\n", request.getName(), request.getFailureTime());
+                currentRequestWaitTime += request.getFailureTime();
                         queue.remove(request);
                     }
             );
         }
-        /*for (Request request : queue) {
-            if (request.getLastFailureTime() < 0) {
-                System.out.println("+++ " + request.getName() + " ушел без обслуживания");
-                queue.remove(request);
-            }
-        }*/
     }
 
     public double getAverageServiceWaitTime() {
@@ -153,7 +149,6 @@ public class Service {
                     leftPassedTime -= value.getServiceTime();
                     if (value.getName() != null) {
                         System.out.println("++ " + value.getName() + " обслужен");
-                        assert value.getFailureTime() >= value.getCurrentWaitTime();
                         currentRequestWaitTime += value.getCurrentWaitTime();
                         value.setServiceTime(0);
                         entry.setValue(null);
